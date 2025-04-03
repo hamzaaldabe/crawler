@@ -1,0 +1,8 @@
+Flask
+Flask_SQLAlchemy
+Flask_HTTPAuth
+APScheduler
+validators
+requests
+beautifulsoup4
+psycopg2-binary
