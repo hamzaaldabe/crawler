@@ -6,3 +6,8 @@ validators
 requests
 beautifulsoup4
 psycopg2-binary
+flask-restx
+flask-jwt-extended
+google-cloud-vision
+google-cloud-storage
+Pillow

@@ -1,29 +1,58 @@
 import requests
 from bs4 import BeautifulSoup
-from validators import url as validate_url
-from flask import current_app
+from urllib.parse import urljoin, urlparse
 from app import db
 from app.models import URL, Asset
+from app.ocr import OCRProcessor
+import os
 
-def crawl_url(url_entry):
-    try:
-        response = requests.get(url_entry.url, timeout=10)
-        if response.status_code != 200:
-            return
-        soup = BeautifulSoup(response.text, 'html.parser')
-        img_tags = soup.find_all('img')
-        for img in img_tags:
-            img_src = img.get('src')
-            if img_src and validate_url(img_src):
-                asset = Asset(asset_url=img_src, asset_type='image', url=url_entry)
-                db.session.add(asset)
-        a_tags = soup.find_all('a', href=True)
-        for a in a_tags:
-            href = a['href']
-            if href.lower().endswith('.pdf') and validate_url(href):
-                asset = Asset(asset_url=href, asset_type='pdf', url=url_entry)
-                db.session.add(asset)
-        url_entry.status = 'CRAWLED'
-        db.session.commit()
-    except Exception as e:
-        current_app.logger.error(f"Error crawling URL {url_entry.url}: {str(e)}")
+class Crawler:
+    def __init__(self):
+        self.ocr_processor = OCRProcessor()
+        self.image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff'}
+        self.pdf_extensions = {'.pdf'}
+
+    def is_image(self, url):
+        return any(url.lower().endswith(ext) for ext in self.image_extensions)
+
+    def is_pdf(self, url):
+        return any(url.lower().endswith(ext) for ext in self.pdf_extensions)
+
+    def crawl_url(self, url_entry):
+        try:
+            response = requests.get(url_entry.url)
+            if response.status_code != 200:
+                url_entry.status = 'failed'
+                db.session.commit()
+                return
+
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Process images
+            for img in soup.find_all('img'):
+                img_url = urljoin(url_entry.url, img.get('src', ''))
+                if self.is_image(img_url):
+                    asset = Asset(url=img_url, asset_type='image', url_id=url_entry.id)
+                    db.session.add(asset)
+                    db.session.commit()  # Commit to get asset.id
+                    # Process with OCR
+                    self.ocr_processor.process_image(img_url, asset.id)
+
+            # Process PDFs
+            for link in soup.find_all('a'):
+                href = link.get('href', '')
+                if self.is_pdf(href):
+                    pdf_url = urljoin(url_entry.url, href)
+                    asset = Asset(url=pdf_url, asset_type='pdf', url_id=url_entry.id)
+                    db.session.add(asset)
+                    db.session.commit()  # Commit to get asset.id
+                    # Process with OCR
+                    self.ocr_processor.process_pdf(pdf_url, asset.id)
+
+            url_entry.status = 'completed'
+            db.session.commit()
+
+        except Exception as e:
+            print(f"Error crawling {url_entry.url}: {str(e)}")
+            url_entry.status = 'failed'
+            db.session.commit()

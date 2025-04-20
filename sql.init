@@ -1,29 +1,56 @@
-CREATE TABLE "user" (
+-- Create user table
+CREATE TABLE IF NOT EXISTS "user" (
     id SERIAL PRIMARY KEY,
     username VARCHAR(80) UNIQUE NOT NULL,
-    password_hash VARCHAR(128) NOT NULL
+    password_hash VARCHAR(128)
 );
 
-CREATE TABLE domain (
+-- Create domain table
+CREATE TABLE IF NOT EXISTS domain (
     id SERIAL PRIMARY KEY,
     domain VARCHAR(255) NOT NULL,
-    user_id INTEGER NOT NULL,
-    FOREIGN KEY (user_id) REFERENCES "user"(id)
+    user_id INTEGER NOT NULL REFERENCES "user"(id)
 );
 
-CREATE TABLE url (
+-- Create url table
+CREATE TABLE IF NOT EXISTS url (
     id SERIAL PRIMARY KEY,
-    url VARCHAR(1024) NOT NULL,
-    status VARCHAR(20) DEFAULT 'PENDING',
-    domain_id INTEGER NOT NULL,
-    FOREIGN KEY (domain_id) REFERENCES domain(id)
+    url VARCHAR(2048) NOT NULL,
+    domain_id INTEGER NOT NULL REFERENCES domain(id),
+    status VARCHAR(50) DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE asset (
+-- Create asset table
+CREATE TABLE IF NOT EXISTS asset (
     id SERIAL PRIMARY KEY,
-    asset_url VARCHAR(1024) NOT NULL,
+    url VARCHAR(2048) NOT NULL,
     asset_type VARCHAR(20),
-    status VARCHAR(20) DEFAULT 'PENDING',
-    url_id INTEGER NOT NULL,
-    FOREIGN KEY (url_id) REFERENCES url(id)
+    status VARCHAR(20) DEFAULT 'pending',
+    url_id INTEGER NOT NULL REFERENCES url(id)
 );
+
+-- Create ocr_result table
+CREATE TABLE IF NOT EXISTS ocr_result (
+    id SERIAL PRIMARY KEY,
+    asset_id INTEGER NOT NULL REFERENCES asset(id),
+    content TEXT,
+    confidence FLOAT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create updated_at trigger function
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Create trigger for url table
+CREATE TRIGGER update_url_updated_at
+    BEFORE UPDATE ON url
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
