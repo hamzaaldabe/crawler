@@ -5,7 +5,7 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SCHEDULER_API_ENABLED = True
     JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY') or 'your-secret-key-here'
-    JWT_ACCESS_TOKEN_EXPIRES = 3600  # 1 hour in seconds
+    JWT_ACCESS_TOKEN_EXPIRES = 360000 
     
     # Google Cloud Configuration
     GOOGLE_CLOUD_PROJECT = os.environ.get('GOOGLE_CLOUD_PROJECT')
