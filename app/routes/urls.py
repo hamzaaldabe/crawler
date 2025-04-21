@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify
 from flask_restx import Namespace, Resource, fields
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app import db, api
-from app.models import Domain, URL
+from app.models import Domain, URL, Asset, User
 from validators import url as validate_url
 
 urls_bp = Blueprint('urls', __name__)
@@ -10,13 +10,22 @@ urls_ns = Namespace('urls', description='URL operations', path='/domains/<int:do
 
 # Swagger models
 url_model = api.model('URL', {
-    'url': fields.String(required=True, description='URL to be crawled')
+    'url': fields.String(required=True, description='URL to be crawled'),
+    'domain_id': fields.Integer(required=True, description='Domain ID')
 })
 
 url_response = api.model('URLResponse', {
     'id': fields.Integer(description='URL ID'),
     'url': fields.String(description='URL'),
     'status': fields.String(description='Crawling status')
+})
+
+asset_response = api.model('AssetResponse', {
+    'id': fields.Integer(description='Asset ID'),
+    'url': fields.String(description='Asset URL'),
+    'asset_type': fields.String(description='Type of asset (image/pdf)'),
+    'status': fields.String(description='Processing status'),
+    'created_at': fields.DateTime(description='Creation timestamp')
 })
 
 @urls_ns.route('')
@@ -116,3 +125,36 @@ class URLResource(Resource):
         db.session.delete(url)
         db.session.commit()
         return {'message': 'URL deleted successfully'}, 200
+
+@urls_ns.route('/<int:url_id>/assets')
+class URLAssets(Resource):
+    @urls_ns.doc('list_url_assets')
+    @urls_ns.response(200, 'Success', [asset_response])
+    @urls_ns.response(404, 'URL not found')
+    @jwt_required()
+    def get(self, url_id):
+        """
+        List all assets for a specific URL
+        
+        Returns a list of all assets (images and PDFs) associated with the given URL.
+        The assets are returned with their current processing status.
+        """
+        current_user_id = get_jwt_identity()
+        url = URL.query.get_or_404(url_id)
+        
+        # Verify user has access to this URL's domain
+        domain = Domain.query.get(url.domain_id)
+        if domain.user_id != current_user_id:
+            return {'error': 'Unauthorized access to URL'}, 403
+        
+        assets = URL.get_assets_by_url_id(url_id)
+        if not assets:
+            return [], 200
+            
+        return [{
+            'id': asset.id,
+            'url': asset.url,
+            'asset_type': asset.asset_type,
+            'status': asset.status,
+            'created_at': asset.created_at.isoformat() if asset.created_at else None
+        } for asset in assets], 200

@@ -59,7 +59,7 @@ class Login(Resource):
         if not user or not user.check_password(password):
             return {'error': 'Invalid username or password'}, 401
             
-        access_token = create_access_token(identity=user.id)
+        access_token = create_access_token(identity=user)
         return {
             'access_token': access_token,
             'user': {
@@ -70,9 +70,11 @@ class Login(Resource):
 
 @jwt.user_identity_loader
 def user_identity_lookup(user):
-    return user
+    if isinstance(user, User):
+        return str(user.id)
+    return str(user)
 
 @jwt.user_lookup_loader
 def user_lookup_callback(_jwt_header, jwt_data):
     identity = jwt_data["sub"]
-    return User.query.filter_by(id=identity).first()
+    return User.query.filter_by(id=int(identity)).first()

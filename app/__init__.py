@@ -30,15 +30,24 @@ def create_app():
     from app.routes.auth import auth_bp, auth_ns
     from app.routes.domains import domains_bp, domains_ns
     from app.routes.urls import urls_bp, urls_ns
+    from app.routes.assets import assets_bp, assets_ns
+    from app.routes.crawler import crawler_bp, crawler_ns
+    from app.routes.ocr import ocr_bp, ocr_ns
 
     app.register_blueprint(auth_bp, url_prefix='/api')
     app.register_blueprint(domains_bp, url_prefix='/api')
     app.register_blueprint(urls_bp, url_prefix='/api')
+    app.register_blueprint(assets_bp, url_prefix='/api')
+    app.register_blueprint(crawler_bp, url_prefix='/api')
+    app.register_blueprint(ocr_bp, url_prefix='/api')
 
     # Register namespaces
     api.add_namespace(auth_ns)
     api.add_namespace(domains_ns)
     api.add_namespace(urls_ns)
+    api.add_namespace(assets_ns)
+    api.add_namespace(crawler_ns)
+    api.add_namespace(ocr_ns)
 
     # Initialize scheduler
     from app.scheduler import init_scheduler

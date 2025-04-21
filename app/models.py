@@ -32,6 +32,28 @@ class URL(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     assets = db.relationship('Asset', backref='parent_url', lazy=True)
 
+    @classmethod
+    def get_assets_by_url_id(cls, url_id):
+        """
+        Get all assets associated with a specific URL ID.
+        
+        Args:
+            url_id (int): The ID of the URL to get assets for
+            
+        Returns:
+            list: A list of Asset objects associated with the URL
+            None: If the URL ID doesn't exist
+            
+        Example:
+            >>> assets = URL.get_assets_by_url_id(1)
+            >>> for asset in assets:
+            ...     print(asset.url)
+        """
+        url = cls.query.get(url_id)
+        if url:
+            return url.assets
+        return None
+
 class Asset(db.Model):
     __tablename__ = 'asset'
     id = db.Column(db.Integer, primary_key=True)
@@ -40,6 +62,28 @@ class Asset(db.Model):
     status = db.Column(db.String(20), default='pending')
     url_id = db.Column(db.Integer, db.ForeignKey('url.id'), nullable=False)
     ocr_results = db.relationship('OCRResult', backref='asset', lazy=True)
+
+    @classmethod
+    def get_ocr_results_by_asset_id(cls, asset_id):
+        """
+        Get all OCR results for a specific asset.
+        
+        Args:
+            asset_id (int): The ID of the asset to get OCR results for
+            
+        Returns:
+            list: A list of OCRResult objects for the asset
+            None: If the asset ID doesn't exist
+            
+        Example:
+            >>> results = Asset.get_ocr_results_by_asset_id(1)
+            >>> for result in results:
+            ...     print(result.content)
+        """
+        asset = cls.query.get(asset_id)
+        if asset:
+            return asset.ocr_results
+        return None
 
 class OCRResult(db.Model):
     __tablename__ = 'ocr_result'
