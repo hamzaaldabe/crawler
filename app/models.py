@@ -30,7 +30,7 @@ class URL(db.Model):
     status = db.Column(db.String(50), default='pending')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    assets = db.relationship('Asset', backref='url', lazy=True)
+    assets = db.relationship('Asset', backref='parent_url', lazy=True)
 
 class Asset(db.Model):
     __tablename__ = 'asset'
