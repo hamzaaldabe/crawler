@@ -7,7 +7,7 @@ from app import db
 
 def init_scheduler(app):
     scheduler = BackgroundScheduler()
-    crawler = Crawler()
+    crawler = Crawler(app)
 
     def crawl_pending_urls():
         with app.app_context():

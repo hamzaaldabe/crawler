@@ -7,8 +7,13 @@ from app.ocr import OCRProcessor
 import os
 
 class Crawler:
-    def __init__(self):
-        self.ocr_processor = OCRProcessor()
+    def __init__(self, app=None):
+        self.app = app
+        if app is not None:
+            with app.app_context():
+                self.ocr_processor = OCRProcessor()
+        else:
+            self.ocr_processor = None
         self.image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff'}
         self.pdf_extensions = {'.pdf'}
 
