@@ -1,0 +1,13 @@
+[Unit]
+Description=Crawler Flask Application
+After=network.target
+
+[Service]
+User=ayaa_qais122
+Group=ayaa_qais122
+WorkingDirectory=/home/ayaa_qais122/crawler
+Environment="PATH=/home/ayaa_qais122/crawler/venv/bin"
+ExecStart=/home/ayaa_qais122/crawler/venv/bin/gunicorn --workers 3 --bind 127.0.0.1:5000 run:app
+
+[Install]
+WantedBy=multi-user.target 
