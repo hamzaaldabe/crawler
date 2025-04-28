@@ -9,6 +9,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.service import Service
 
 from app import db
 from app.models import URL, Asset
@@ -66,8 +67,9 @@ class Crawler:
             options.add_argument('--disable-dev-shm-usage')
             options.add_argument(f'user-agent={self.headers["User-Agent"]}')
             
-            # Correct WebDriver initialization
-            driver = webdriver.Chrome(executable_path=ChromeDriverManager().install(), options=options)
+            # Use Service object for driver initialization
+            service = Service(ChromeDriverManager().install())
+            driver = webdriver.Chrome(service=service, options=options)
             
             try:
                 # Navigate to the URL
