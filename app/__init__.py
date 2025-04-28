@@ -4,6 +4,7 @@ from flask_httpauth import HTTPBasicAuth
 from flask_restx import Api
 from flask_jwt_extended import JWTManager
 from app.config import Config
+from flask_cors import CORS
 
 # Initialize extensions
 db = SQLAlchemy()
@@ -20,6 +21,9 @@ api = Api(
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
+    
+    # Enable CORS for all origins and all methods
+    CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
     
     # Initialize extensions with app
     db.init_app(app)
