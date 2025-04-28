@@ -66,8 +66,8 @@ class Crawler:
             options.add_argument('--disable-dev-shm-usage')
             options.add_argument(f'user-agent={self.headers["User-Agent"]}')
             
-            # Initialize the driver using webdriver-manager
-            driver = webdriver.Chrome(ChromeDriverManager().install(), options=options)
+            # Correct WebDriver initialization
+            driver = webdriver.Chrome(executable_path=ChromeDriverManager().install(), options=options)
             
             try:
                 # Navigate to the URL
