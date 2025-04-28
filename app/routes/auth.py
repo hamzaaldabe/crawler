@@ -42,7 +42,13 @@ class Signup(Resource):
         user.set_password(password)
         db.session.add(user)
         db.session.commit()
-        return {'message': 'User created successfully'}, 201
+        return {
+            'message': 'User created successfully',
+            'user': {
+                'id': user.id,
+                'username': user.username
+            }
+        }, 201
 
 @auth_ns.route('/login')
 class Login(Resource):
