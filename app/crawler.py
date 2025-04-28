@@ -8,6 +8,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
 
 from app import db
 from app.models import URL, Asset
@@ -65,8 +66,8 @@ class Crawler:
             options.add_argument('--disable-dev-shm-usage')
             options.add_argument(f'user-agent={self.headers["User-Agent"]}')
             
-            # Initialize the driver
-            driver = webdriver.Chrome(options=options)
+            # Initialize the driver using webdriver-manager
+            driver = webdriver.Chrome(ChromeDriverManager().install(), options=options)
             
             try:
                 # Navigate to the URL
@@ -109,7 +110,6 @@ class Crawler:
             soup = BeautifulSoup(html, 'html.parser')
             base_url = url_entry.url
 
-            # 1) <img> tags
             for img in soup.find_all('img'):
                 for attr in ('src', 'data-src'):
                     src = img.get(attr)
@@ -119,7 +119,6 @@ class Crawler:
                             asset = self.save_asset(full, 'image', url_entry)
                             self.process_with_ocr(asset)
 
-                # srcset
                 if img.get('srcset'):
                     for candidate in img['srcset'].split(','):
                         full = urljoin(base_url, candidate.strip().split()[0])
@@ -127,7 +126,6 @@ class Crawler:
                             asset = self.save_asset(full, 'image', url_entry)
                             self.process_with_ocr(asset)
 
-            # 2) Inline background-images
             for el in soup.find_all(style=True):
                 style = el['style'] or ''
                 if 'background-image' in style:
@@ -137,7 +135,6 @@ class Crawler:
                             asset = self.save_asset(full, 'image', url_entry)
                             self.process_with_ocr(asset)
 
-            # 3) <picture> / <source>
             for src in soup.find_all('source'):
                 if src.get('srcset'):
                     full = urljoin(base_url, src['srcset'].split()[0])
@@ -145,7 +142,6 @@ class Crawler:
                         asset = self.save_asset(full, 'image', url_entry)
                         self.process_with_ocr(asset)
 
-            # 4) PDFs
             for a in soup.find_all('a', href=True):
                 href = a['href']
                 if self.is_pdf(href):
