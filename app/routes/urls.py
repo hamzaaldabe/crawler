@@ -127,10 +127,12 @@ class URLResource(Resource):
         return {'message': 'URL deleted successfully'}, 200
 
 @urls_ns.route('/<int:url_id>/assets')
+@urls_ns.param('url_id', 'The URL identifier')
 class URLAssets(Resource):
     @urls_ns.doc('list_url_assets')
     @urls_ns.response(200, 'Success', [asset_response])
     @urls_ns.response(404, 'URL not found')
+    @urls_ns.response(403, 'Unauthorized access')
     @jwt_required()
     def get(self, url_id):
         """
@@ -140,6 +142,8 @@ class URLAssets(Resource):
         The assets are returned with their current processing status.
         """
         current_user_id = get_jwt_identity()
+        
+        # Get URL and verify it exists
         url = URL.query.get_or_404(url_id)
         
         # Verify user has access to this URL's domain
