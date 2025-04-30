@@ -33,7 +33,7 @@ def create_app():
     # Register blueprints
     from app.routes.auth import auth_bp, auth_ns
     from app.routes.domains import domains_bp, domains_ns
-    from app.routes.urls import urls_bp, urls_ns
+    from app.routes.urls import urls_bp, urls_ns, domain_urls_ns
     from app.routes.assets import assets_bp, assets_ns
     from app.routes.crawler import crawler_bp, crawler_ns
     from app.routes.ocr import ocr_bp, ocr_ns
@@ -49,6 +49,7 @@ def create_app():
     api.add_namespace(auth_ns)
     api.add_namespace(domains_ns)
     api.add_namespace(urls_ns)
+    api.add_namespace(domain_urls_ns)
     api.add_namespace(assets_ns)
     api.add_namespace(crawler_ns)
     api.add_namespace(ocr_ns)
