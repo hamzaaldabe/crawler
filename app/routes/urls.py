@@ -6,7 +6,10 @@ from app.models import Domain, URL, Asset, User
 from validators import url as validate_url
 
 urls_bp = Blueprint('urls', __name__)
-urls_ns = Namespace('urls', description='URL operations', path='/domains/<int:domain_id>/urls')
+urls_ns = Namespace('urls', description='URL operations')
+
+# Create a separate namespace for domain-specific URL operations
+domain_urls_ns = Namespace('domain_urls', description='Domain-specific URL operations', path='/domains/<int:domain_id>/urls')
 
 # Swagger models
 url_model = api.model('URL', {
@@ -28,12 +31,12 @@ asset_response = api.model('AssetResponse', {
     'created_at': fields.DateTime(description='Creation timestamp')
 })
 
-@urls_ns.route('')
-@urls_ns.param('domain_id', 'The domain identifier')
+@domain_urls_ns.route('')
+@domain_urls_ns.param('domain_id', 'The domain identifier')
 class URLList(Resource):
     @jwt_required()
-    @urls_ns.marshal_list_with(url_response)
-    @urls_ns.response(404, 'Domain not found')
+    @domain_urls_ns.marshal_list_with(url_response)
+    @domain_urls_ns.response(404, 'Domain not found')
     def get(self, domain_id):
         """List all URLs for a specific domain"""
         current_user_id = get_jwt_identity()
@@ -44,10 +47,10 @@ class URLList(Resource):
         return [{'id': u.id, 'url': u.url, 'status': u.status} for u in urls]
 
     @jwt_required()
-    @urls_ns.expect(url_model)
-    @urls_ns.response(201, 'URL added successfully')
-    @urls_ns.response(400, 'Invalid URL')
-    @urls_ns.response(404, 'Domain not found')
+    @domain_urls_ns.expect(url_model)
+    @domain_urls_ns.response(201, 'URL added successfully')
+    @domain_urls_ns.response(400, 'Invalid URL')
+    @domain_urls_ns.response(404, 'Domain not found')
     def post(self, domain_id):
         """Add a new URL to a domain"""
         current_user_id = get_jwt_identity()
@@ -63,13 +66,13 @@ class URLList(Resource):
         db.session.commit()
         return {'message': 'URL added successfully', 'url_id': url_entry.id}, 201
 
-@urls_ns.route('/<int:url_id>')
-@urls_ns.param('domain_id', 'The domain identifier')
-@urls_ns.param('url_id', 'The URL identifier')
+@domain_urls_ns.route('/<int:url_id>')
+@domain_urls_ns.param('domain_id', 'The domain identifier')
+@domain_urls_ns.param('url_id', 'The URL identifier')
 class URLResource(Resource):
     @jwt_required()
-    @urls_ns.marshal_with(url_response)
-    @urls_ns.response(404, 'URL not found')
+    @domain_urls_ns.marshal_with(url_response)
+    @domain_urls_ns.response(404, 'URL not found')
     def get(self, domain_id, url_id):
         """Get a specific URL"""
         current_user_id = get_jwt_identity()
@@ -84,10 +87,10 @@ class URLResource(Resource):
         return {'id': url.id, 'url': url.url, 'status': url.status}
 
     @jwt_required()
-    @urls_ns.expect(url_model)
-    @urls_ns.response(200, 'URL updated successfully')
-    @urls_ns.response(400, 'Invalid URL')
-    @urls_ns.response(404, 'URL not found')
+    @domain_urls_ns.expect(url_model)
+    @domain_urls_ns.response(200, 'URL updated successfully')
+    @domain_urls_ns.response(400, 'Invalid URL')
+    @domain_urls_ns.response(404, 'URL not found')
     def put(self, domain_id, url_id):
         """Update a URL"""
         current_user_id = get_jwt_identity()
@@ -109,8 +112,8 @@ class URLResource(Resource):
         return {'message': 'URL updated successfully'}, 200
 
     @jwt_required()
-    @urls_ns.response(200, 'URL deleted successfully')
-    @urls_ns.response(404, 'URL not found')
+    @domain_urls_ns.response(200, 'URL deleted successfully')
+    @domain_urls_ns.response(404, 'URL not found')
     def delete(self, domain_id, url_id):
         """Delete a URL"""
         current_user_id = get_jwt_identity()
