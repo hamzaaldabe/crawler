@@ -129,10 +129,29 @@ class URLResource(Resource):
 @urls_ns.route('/<int:url_id>/assets')
 @urls_ns.param('url_id', 'The URL identifier')
 class URLAssets(Resource):
-    @urls_ns.doc('list_url_assets')
+    @urls_ns.doc('list_url_assets',
+        description='Retrieve all assets (images and PDFs) associated with a specific URL',
+        notes='''
+        This endpoint returns all assets that were found and processed for the given URL.
+        The domain ownership is automatically verified based on the URL's association.
+        
+        Example response:
+        ```json
+        [
+            {
+                "id": 1,
+                "url": "https://example.com/image.jpg",
+                "asset_type": "image",
+                "status": "processed",
+                "created_at": "2024-04-30T08:14:46"
+            }
+        ]
+        ```
+        '''
+    )
     @urls_ns.response(200, 'Success', [asset_response])
     @urls_ns.response(404, 'URL not found')
-    @urls_ns.response(403, 'Unauthorized access')
+    @urls_ns.response(403, 'Unauthorized access - User does not own the domain containing this URL')
     @jwt_required()
     def get(self, url_id):
         """
@@ -140,6 +159,18 @@ class URLAssets(Resource):
         
         Returns a list of all assets (images and PDFs) associated with the given URL.
         The assets are returned with their current processing status.
+        
+        The endpoint automatically verifies:
+        1. The URL exists
+        2. The user has access to the domain that owns the URL
+        
+        Returns:
+            list: A list of assets with their details including:
+                - id: Asset ID
+                - url: Asset URL
+                - asset_type: Type of asset (image/pdf)
+                - status: Processing status
+                - created_at: Creation timestamp
         """
         current_user_id = get_jwt_identity()
         
