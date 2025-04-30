@@ -20,7 +20,7 @@ class Domain(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     domain = db.Column(db.String(255), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    urls = db.relationship('URL', backref='domain', lazy=True)
+    urls = db.relationship('URL', backref='domain', lazy=True, cascade='all, delete-orphan')
 
 class URL(db.Model):
     __tablename__ = 'url'
@@ -30,7 +30,7 @@ class URL(db.Model):
     status = db.Column(db.String(50), default='pending')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    assets = db.relationship('Asset', backref='parent_url', lazy=True)
+    assets = db.relationship('Asset', backref='parent_url', lazy=True, cascade='all, delete-orphan')
 
     @classmethod
     def get_assets_by_url_id(cls, url_id):
