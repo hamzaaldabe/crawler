@@ -69,75 +69,65 @@ class Crawler:
                 current_app.logger.error(f"Error processing OCR for asset {asset.url}: {str(e)}")
 
     def fetch_dom(self, url):
-        """
-        Fetch DOM using Selenium with proper wait conditions and retries.
-        Returns final HTML string.
-        """
+        """Fetch DOM using Selenium"""
+        options = webdriver.ChromeOptions()
+        options.add_argument('--headless')
+        options.add_argument('--no-sandbox')
+        options.add_argument('--disable-dev-shm-usage')
+        options.add_argument('--disable-gpu')
+        options.add_argument('--window-size=1920,1080')
+        
         driver = None
-        for attempt in range(self.max_retries):
+        retry_count = 0
+        max_retries = 3
+        base_timeout = 30  # Base timeout in seconds
+        
+        while retry_count < max_retries:
             try:
-                # Configure Chrome options
-                options = Options()
-                options.add_argument('--headless')
-                options.add_argument('--no-sandbox')
-                options.add_argument('--disable-dev-shm-usage')
-                options.add_argument('--disable-gpu')
-                options.add_argument('--window-size=1920,1080')
-                options.add_argument(f'user-agent={self.headers["User-Agent"]}')
-                
-                # Use Service object for driver initialization
-                service = Service(ChromeDriverManager().install())
-                driver = webdriver.Chrome(service=service, options=options)
-                
+                driver = webdriver.Chrome(options=options)
                 # Set timeouts
-                driver.set_page_load_timeout(self.page_load_timeout)
-                driver.set_script_timeout(self.script_timeout)
+                driver.set_page_load_timeout(base_timeout * (retry_count + 1))  # Increase timeout with each retry
+                driver.set_script_timeout(base_timeout * (retry_count + 1))
                 
-                # Navigate to the URL
+                # Navigate to URL
                 driver.get(url)
                 
-                # Wait for the page to load
-                WebDriverWait(driver, 15).until(
-                    EC.presence_of_element_located((By.TAG_NAME, 'body'))
-                )
-                
-                # Wait for images to load
-                WebDriverWait(driver, 10).until(
-                    lambda d: d.execute_script('return document.readyState') == 'complete'
-                )
+                # Wait for page to load
+                wait = WebDriverWait(driver, base_timeout * (retry_count + 1))
+                wait.until(lambda d: d.execute_script('return document.readyState') == 'complete')
                 
                 # Additional wait for dynamic content
                 time.sleep(2)
                 
-                # Get the page source
-                html = driver.page_source
-                return html
+                # Get page source
+                return driver.page_source
                 
             except TimeoutException as e:
-                current_app.logger.warning(f"Timeout on attempt {attempt + 1} for {url}: {str(e)}")
-                if attempt == self.max_retries - 1:
-                    current_app.logger.error(f"All attempts timed out for {url}")
-                    return None
-                time.sleep(2 ** attempt)  # Exponential backoff
+                retry_count += 1
+                if retry_count >= max_retries:
+                    current_app.logger.error(f"Timeout on attempt {retry_count} for {url}: {str(e)}")
+                    raise
+                current_app.logger.warning(f"Timeout on attempt {retry_count} for {url}: {str(e)}")
+                time.sleep(2 * retry_count)  # Exponential backoff
                 
             except WebDriverException as e:
-                current_app.logger.error(f"WebDriver error on attempt {attempt + 1} for {url}: {str(e)}")
-                if attempt == self.max_retries - 1:
-                    return None
-                time.sleep(2 ** attempt)
+                retry_count += 1
+                if retry_count >= max_retries:
+                    current_app.logger.error(f"WebDriver error on attempt {retry_count} for {url}: {str(e)}")
+                    raise
+                current_app.logger.warning(f"WebDriver error on attempt {retry_count} for {url}: {str(e)}")
+                time.sleep(2 * retry_count)  # Exponential backoff
                 
             except Exception as e:
-                current_app.logger.error(f"Unexpected error on attempt {attempt + 1} for {url}: {str(e)}")
-                if attempt == self.max_retries - 1:
-                    return None
-                time.sleep(2 ** attempt)
+                current_app.logger.error(f"Unexpected error fetching {url}: {str(e)}")
+                raise
                 
             finally:
                 if driver:
                     try:
                         driver.quit()
                     except Exception as e:
-                        current_app.logger.error(f"Error quitting driver: {str(e)}")
+                        current_app.logger.error(f"Error closing driver: {str(e)}")
         
         return None
 
