@@ -9,14 +9,14 @@ CREATE TABLE IF NOT EXISTS "user" (
 CREATE TABLE IF NOT EXISTS domain (
     id SERIAL PRIMARY KEY,
     domain VARCHAR(255) NOT NULL,
-    user_id INTEGER NOT NULL REFERENCES "user"(id)
+    user_id INTEGER NOT NULL REFERENCES "user"(id) ON DELETE CASCADE
 );
 
 -- Create url table
 CREATE TABLE IF NOT EXISTS url (
     id SERIAL PRIMARY KEY,
     url VARCHAR(2048) NOT NULL,
-    domain_id INTEGER NOT NULL REFERENCES domain(id),
+    domain_id INTEGER NOT NULL REFERENCES domain(id) ON DELETE CASCADE,
     status VARCHAR(50) DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -28,13 +28,13 @@ CREATE TABLE IF NOT EXISTS asset (
     url VARCHAR(2048) NOT NULL,
     asset_type VARCHAR(20),
     status VARCHAR(20) DEFAULT 'pending',
-    url_id INTEGER NOT NULL REFERENCES url(id)
+    url_id INTEGER NOT NULL REFERENCES url(id) ON DELETE CASCADE
 );
 
 -- Create ocr_result table
 CREATE TABLE IF NOT EXISTS ocr_result (
     id SERIAL PRIMARY KEY,
-    asset_id INTEGER NOT NULL REFERENCES asset(id),
+    asset_id INTEGER NOT NULL REFERENCES asset(id) ON DELETE CASCADE,
     content TEXT,
     confidence FLOAT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -54,3 +54,51 @@ CREATE TRIGGER update_url_updated_at
     BEFORE UPDATE ON url
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
+
+-- Add ON DELETE CASCADE to existing foreign keys if they don't have it
+DO $$ 
+BEGIN
+    -- Domain to User
+    IF EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'domain_user_id_fkey'
+    ) THEN
+        ALTER TABLE domain 
+        DROP CONSTRAINT domain_user_id_fkey,
+        ADD CONSTRAINT domain_user_id_fkey 
+        FOREIGN KEY (user_id) REFERENCES "user"(id) ON DELETE CASCADE;
+    END IF;
+
+    -- URL to Domain
+    IF EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'url_domain_id_fkey'
+    ) THEN
+        ALTER TABLE url 
+        DROP CONSTRAINT url_domain_id_fkey,
+        ADD CONSTRAINT url_domain_id_fkey 
+        FOREIGN KEY (domain_id) REFERENCES domain(id) ON DELETE CASCADE;
+    END IF;
+
+    -- Asset to URL
+    IF EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'asset_url_id_fkey'
+    ) THEN
+        ALTER TABLE asset 
+        DROP CONSTRAINT asset_url_id_fkey,
+        ADD CONSTRAINT asset_url_id_fkey 
+        FOREIGN KEY (url_id) REFERENCES url(id) ON DELETE CASCADE;
+    END IF;
+
+    -- OCR Result to Asset
+    IF EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'ocr_result_asset_id_fkey'
+    ) THEN
+        ALTER TABLE ocr_result 
+        DROP CONSTRAINT ocr_result_asset_id_fkey,
+        ADD CONSTRAINT ocr_result_asset_id_fkey 
+        FOREIGN KEY (asset_id) REFERENCES asset(id) ON DELETE CASCADE;
+    END IF;
+END $$;
