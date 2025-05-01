@@ -1,5 +1,6 @@
 import re
 import os
+import time
 from urllib.parse import urljoin
 from cloudscraper import create_scraper
 from bs4 import BeautifulSoup
@@ -8,8 +9,10 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException, WebDriverException
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service
+from flask import current_app
 
 from app import db
 from app.models import URL, Asset
@@ -34,6 +37,9 @@ class Crawler:
             ),
             'Accept-Language': 'en-US,en;q=0.9',
         }
+        self.page_load_timeout = 30  # seconds
+        self.script_timeout = 30     # seconds
+        self.max_retries = 3         # number of retries for failed requests
 
     def is_image(self, url):
         return any(url.lower().endswith(ext) for ext in self.image_extensions)
@@ -42,36 +48,51 @@ class Crawler:
         return any(url.lower().endswith(ext) for ext in self.pdf_extensions)
 
     def save_asset(self, url, typ, url_entry):
-        asset = Asset(url=url, asset_type=typ, url_id=url_entry.id)
-        db.session.add(asset)
-        db.session.commit()
-        return asset
+        try:
+            asset = Asset(url=url, asset_type=typ, url_id=url_entry.id)
+            db.session.add(asset)
+            db.session.commit()
+            return asset
+        except Exception as e:
+            current_app.logger.error(f"Error saving asset {url}: {str(e)}")
+            db.session.rollback()
+            return None
 
     def process_with_ocr(self, asset, is_pdf=False):
-        if self.ocr_processor:
-            if is_pdf:
-                self.ocr_processor.process_pdf(asset.url, asset.id)
-            else:
-                self.ocr_processor.process_image(asset.url, asset.id)
+        if self.ocr_processor and asset:
+            try:
+                if is_pdf:
+                    self.ocr_processor.process_pdf(asset.url, asset.id)
+                else:
+                    self.ocr_processor.process_image(asset.url, asset.id)
+            except Exception as e:
+                current_app.logger.error(f"Error processing OCR for asset {asset.url}: {str(e)}")
 
     def fetch_dom(self, url):
         """
-        Fetch DOM using Selenium with proper wait conditions.
+        Fetch DOM using Selenium with proper wait conditions and retries.
         Returns final HTML string.
         """
-        try:
-            # Configure Chrome options
-            options = Options()
-            options.add_argument('--headless')
-            options.add_argument('--no-sandbox')
-            options.add_argument('--disable-dev-shm-usage')
-            options.add_argument(f'user-agent={self.headers["User-Agent"]}')
-            
-            # Use Service object for driver initialization
-            service = Service(ChromeDriverManager().install())
-            driver = webdriver.Chrome(service=service, options=options)
-            
+        driver = None
+        for attempt in range(self.max_retries):
             try:
+                # Configure Chrome options
+                options = Options()
+                options.add_argument('--headless')
+                options.add_argument('--no-sandbox')
+                options.add_argument('--disable-dev-shm-usage')
+                options.add_argument('--disable-gpu')
+                options.add_argument('--window-size=1920,1080')
+                options.add_argument(f'user-agent={self.headers["User-Agent"]}')
+                
+                # Use Service object for driver initialization
+                service = Service(ChromeDriverManager().install())
+                driver = webdriver.Chrome(service=service, options=options)
+                
+                # Set timeouts
+                driver.set_page_load_timeout(self.page_load_timeout)
+                driver.set_script_timeout(self.script_timeout)
+                
                 # Navigate to the URL
                 driver.get(url)
                 
@@ -85,21 +106,40 @@ class Crawler:
                     lambda d: d.execute_script('return document.readyState') == 'complete'
                 )
                 
+                # Additional wait for dynamic content
+                time.sleep(2)
+                
                 # Get the page source
                 html = driver.page_source
                 return html
                 
+            except TimeoutException as e:
+                current_app.logger.warning(f"Timeout on attempt {attempt + 1} for {url}: {str(e)}")
+                if attempt == self.max_retries - 1:
+                    current_app.logger.error(f"All attempts timed out for {url}")
+                    return None
+                time.sleep(2 ** attempt)  # Exponential backoff
+                
+            except WebDriverException as e:
+                current_app.logger.error(f"WebDriver error on attempt {attempt + 1} for {url}: {str(e)}")
+                if attempt == self.max_retries - 1:
+                    return None
+                time.sleep(2 ** attempt)
+                
             except Exception as e:
-                print(f"Error during Selenium operations: {e}")
-                return None
+                current_app.logger.error(f"Unexpected error on attempt {attempt + 1} for {url}: {str(e)}")
+                if attempt == self.max_retries - 1:
+                    return None
+                time.sleep(2 ** attempt)
                 
             finally:
-                # Always quit the driver
-                driver.quit()
-                
-        except Exception as e:
-            print(f"Error initializing Selenium: {e}")
-            return None
+                if driver:
+                    try:
+                        driver.quit()
+                    except Exception as e:
+                        current_app.logger.error(f"Error quitting driver: {str(e)}")
+        
+        return None
 
     def crawl_url(self, url_entry: URL):
         try:
@@ -112,6 +152,7 @@ class Crawler:
             soup = BeautifulSoup(html, 'html.parser')
             base_url = url_entry.url
 
+            # Process images
             for img in soup.find_all('img'):
                 for attr in ('src', 'data-src'):
                     src = img.get(attr)
@@ -128,6 +169,7 @@ class Crawler:
                             asset = self.save_asset(full, 'image', url_entry)
                             self.process_with_ocr(asset)
 
+            # Process background images
             for el in soup.find_all(style=True):
                 style = el['style'] or ''
                 if 'background-image' in style:
@@ -137,6 +179,7 @@ class Crawler:
                             asset = self.save_asset(full, 'image', url_entry)
                             self.process_with_ocr(asset)
 
+            # Process source elements
             for src in soup.find_all('source'):
                 if src.get('srcset'):
                     full = urljoin(base_url, src['srcset'].split()[0])
@@ -144,6 +187,7 @@ class Crawler:
                         asset = self.save_asset(full, 'image', url_entry)
                         self.process_with_ocr(asset)
 
+            # Process PDFs
             for a in soup.find_all('a', href=True):
                 href = a['href']
                 if self.is_pdf(href):
@@ -155,6 +199,6 @@ class Crawler:
             db.session.commit()
 
         except Exception as e:
-            print(f"Error crawling {url_entry.url}: {e}")
+            current_app.logger.error(f"Error crawling {url_entry.url}: {str(e)}")
             url_entry.status = 'failed'
             db.session.commit()
