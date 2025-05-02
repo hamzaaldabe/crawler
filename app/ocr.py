@@ -75,7 +75,7 @@ class OCRProcessor:
             ocr_result = OCRResult(
                 asset_id=asset_id,
                 content=document.text,
-                confidence=response.text_annotations[0].confidence if response.text_annotations else 0.0
+                confidence=document.pages[0].confidence if document.pages else 0.0
             )
             db.session.add(ocr_result)
             db.session.commit()
