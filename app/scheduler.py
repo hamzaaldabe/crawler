@@ -12,7 +12,6 @@ def init_scheduler(app):
     def crawl_pending_urls():
         with app.app_context():
             try:
-                # Get all pending URLs
                 pending_urls = URL.query.filter_by(status='pending').all()
                 
                 if not pending_urls:
@@ -21,10 +20,8 @@ def init_scheduler(app):
                 
                 current_app.logger.info(f"Processing {len(pending_urls)} pending URLs")
                 
-                # Initialize crawler
                 crawler = Crawler(app)
                 
-                # Process each URL
                 for url in pending_urls:
                     try:
                         current_app.logger.info(f"Processing URL: {url.url}")
@@ -37,7 +34,6 @@ def init_scheduler(app):
             except Exception as e:
                 current_app.logger.error(f"Error in crawl_pending_urls job: {str(e)}")
     
-    # Add the job to run every hour
     scheduler.add_job(
         func=crawl_pending_urls,
         trigger=IntervalTrigger(hours=1),

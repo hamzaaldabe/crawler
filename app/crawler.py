@@ -69,37 +69,38 @@ class Crawler:
                 current_app.logger.error(f"Error processing OCR for asset {asset.url}: {str(e)}")
 
     def fetch_dom(self, url):
-        """Fetch DOM using Selenium"""
         options = webdriver.ChromeOptions()
-        options.add_argument('--headless')
+        options.add_argument('--headless=new')  # Use new headless mode
         options.add_argument('--no-sandbox')
         options.add_argument('--disable-dev-shm-usage')
         options.add_argument('--disable-gpu')
         options.add_argument('--window-size=1920,1080')
+        options.add_argument('--disable-extensions')
+        options.add_argument('--disable-software-rasterizer')
+        options.add_argument('--disable-features=VizDisplayCompositor')
+        options.add_argument('--disable-features=IsolateOrigins,site-per-process')
         
         driver = None
         retry_count = 0
         max_retries = 3
-        base_timeout = 30  # Base timeout in seconds
+        base_timeout = 30
         
         while retry_count < max_retries:
             try:
-                driver = webdriver.Chrome(options=options)
-                # Set timeouts
-                driver.set_page_load_timeout(base_timeout * (retry_count + 1))  # Increase timeout with each retry
+                service = Service()
+                driver = webdriver.Chrome(service=service, options=options)
+                
+                driver.set_page_load_timeout(base_timeout * (retry_count + 1))
                 driver.set_script_timeout(base_timeout * (retry_count + 1))
                 
-                # Navigate to URL
+                current_app.logger.info(f"Navigating to URL: {url}")
                 driver.get(url)
                 
-                # Wait for page to load
                 wait = WebDriverWait(driver, base_timeout * (retry_count + 1))
                 wait.until(lambda d: d.execute_script('return document.readyState') == 'complete')
                 
-                # Additional wait for dynamic content
                 time.sleep(2)
                 
-                # Get page source
                 return driver.page_source
                 
             except TimeoutException as e:
@@ -159,7 +160,6 @@ class Crawler:
                             asset = self.save_asset(full, 'image', url_entry)
                             self.process_with_ocr(asset)
 
-            # Process background images
             for el in soup.find_all(style=True):
                 style = el['style'] or ''
                 if 'background-image' in style:
@@ -177,7 +177,6 @@ class Crawler:
                         asset = self.save_asset(full, 'image', url_entry)
                         self.process_with_ocr(asset)
 
-            # Process PDFs
             for a in soup.find_all('a', href=True):
                 href = a['href']
                 if self.is_pdf(href):

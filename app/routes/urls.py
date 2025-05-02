@@ -1,9 +1,13 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_restx import Namespace, Resource, fields
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app import db, api
 from app.models import Domain, URL, Asset, User
 from validators import url as validate_url
+from app.crawler import Crawler
+from datetime import datetime
+from urllib.parse import urlparse
+import threading
 
 urls_bp = Blueprint('urls', __name__)
 urls_ns = Namespace('urls', description='URL operations')
@@ -196,3 +200,40 @@ class URLAssets(Resource):
             'status': asset.status,
             'created_at': asset.created_at.isoformat() if asset.created_at else None
         } for asset in assets], 200
+
+@urls_ns.route('/crawl-pending')
+class CrawlPendingURLs(Resource):
+    @jwt_required()
+    def post(self):
+        """Manually trigger crawling of all pending URLs"""
+        try:
+            # Get all pending URLs
+            pending_urls = URL.query.filter_by(status='pending').all()
+            
+            if not pending_urls:
+                return {'message': 'No pending URLs to process'}, 200
+            
+            # Start crawling in a background thread
+            def crawl_background():
+                with current_app.app_context():
+                    crawler = Crawler(current_app)
+                    for url in pending_urls:
+                        try:
+                            current_app.logger.info(f"Processing URL: {url.url}")
+                            crawler.crawl_url(url)
+                        except Exception as e:
+                            current_app.logger.error(f"Error processing URL {url.url}: {str(e)}")
+                            url.status = 'failed'
+                            db.session.commit()
+            
+            thread = threading.Thread(target=crawl_background)
+            thread.start()
+            
+            return {
+                'message': f'Started crawling {len(pending_urls)} pending URLs',
+                'urls_count': len(pending_urls)
+            }, 202
+            
+        except Exception as e:
+            current_app.logger.error(f"Error in crawl-pending endpoint: {str(e)}")
+            return {'error': str(e)}, 500
