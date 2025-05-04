@@ -133,15 +133,20 @@ class URLResource(Resource):
         db.session.commit()
         return {'message': 'URL deleted successfully'}, 200
 
-@urls_ns.route('/<int:url_id>/assets')
+@urls_ns.route('/domains/<int:domain_id>/urls/<int:url_id>/assets')
+@urls_ns.param('domain_id', 'The domain identifier (must be provided in the path)')
 @urls_ns.param('url_id', 'The URL identifier')
 class URLAssets(Resource):
     @urls_ns.doc('list_url_assets',
-        description='Retrieve all assets (images and PDFs) associated with a specific URL',
+        description='Retrieve all assets (images and PDFs) associated with a specific URL.\n\n'
+                    'Path parameters:\n'
+                    '- domain_id: The domain this URL belongs to.\n'
+                    '- url_id: The URL to list assets for.\n',
         notes='''
-        This endpoint returns all assets that were found and processed for the given URL.
-        The domain ownership is automatically verified based on the URL's association.
-        
+        This endpoint returns all assets that were found and processed for the given URL.\n
+        The domain ownership is automatically verified based on the URL's association.\n
+        Example request:\n
+            GET /api/domains/28/urls/18/assets\n
         Example response:
         ```json
         [
@@ -162,7 +167,12 @@ class URLAssets(Resource):
     @jwt_required()
     def get(self, domain_id, url_id):
         """
-        List all assets for a specific URL
+        List all assets for a specific URL.
+        
+        Path parameters:
+          - domain_id: The domain this URL belongs to.
+          - url_id: The URL to list assets for.
+        
         Returns a list of all assets (images and PDFs) associated with the given URL.
         The assets are returned with their current processing status.
         
@@ -179,13 +189,12 @@ class URLAssets(Resource):
                 - created_at: Creation timestamp
         """
         current_user_id = get_jwt_identity()
-        
         # Get URL and verify it exists
-        url = URL.query.get_or_404(url_id)
-        
-        # Verify user has access to this URL's domain
-        domain = Domain.query.get(url.domain_id)
-        if domain.user_id != current_user_id:
+        url = URL.query.filter_by(id=url_id, domain_id=domain_id).first()
+        if not url:
+            return {'error': 'URL not found'}, 404
+        domain = Domain.query.get(domain_id)
+        if not domain or domain.user_id != current_user_id:
             return {'error': 'Unauthorized access to URL'}, 403
         assets = URL.get_assets_by_url_id(url_id)
         if not assets:
