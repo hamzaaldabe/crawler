@@ -160,10 +160,9 @@ class URLAssets(Resource):
     @urls_ns.response(404, 'URL not found')
     @urls_ns.response(403, 'Unauthorized access - User does not own the domain containing this URL')
     @jwt_required()
-    def get(self, url_id):
+    def get(self, domain_id, url_id):
         """
         List all assets for a specific URL
-        
         Returns a list of all assets (images and PDFs) associated with the given URL.
         The assets are returned with their current processing status.
         
@@ -188,11 +187,9 @@ class URLAssets(Resource):
         domain = Domain.query.get(url.domain_id)
         if domain.user_id != current_user_id:
             return {'error': 'Unauthorized access to URL'}, 403
-        
         assets = URL.get_assets_by_url_id(url_id)
         if not assets:
             return [], 200
-            
         return [{
             'id': asset.id,
             'url': asset.url,
