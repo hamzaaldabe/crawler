@@ -199,8 +199,7 @@ class URLAssets(Resource):
             'id': asset.id,
             'url': asset.url,
             'asset_type': asset.asset_type,
-            'status': asset.status,
-            'created_at': asset.created_at.isoformat() if asset.created_at else None
+            'status': asset.status
         } for asset in assets], 200
 
 @urls_ns.route('/crawl-pending')
