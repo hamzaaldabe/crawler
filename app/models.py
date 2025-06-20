@@ -25,9 +25,10 @@ class Domain(db.Model):
 class URL(db.Model):
     __tablename__ = 'url'
     id = db.Column(db.Integer, primary_key=True)
-    url = db.Column(db.String(2048), nullable=False)
+    url = db.Column(db.String(512), nullable=False)
     domain_id = db.Column(db.Integer, db.ForeignKey('domain.id'), nullable=False)
-    status = db.Column(db.String(50), default='pending')
+    status = db.Column(db.String(20), default='pending')
+    page_content = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     assets = db.relationship('Asset', backref='parent_url', lazy=True, cascade='all, delete-orphan')

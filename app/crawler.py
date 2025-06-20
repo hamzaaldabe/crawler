@@ -37,8 +37,8 @@ class Crawler:
             ),
             'Accept-Language': 'en-US,en;q=0.9',
         }
-        self.page_load_timeout = 30  # seconds
-        self.script_timeout = 30     # seconds
+        self.page_load_timeout = 60  # seconds
+        self.script_timeout = 60     # seconds
         self.max_retries = 3         # number of retries for failed requests
 
     def is_image(self, url):
@@ -61,12 +61,17 @@ class Crawler:
     def process_with_ocr(self, asset, is_pdf=False):
         if self.ocr_processor and asset:
             try:
+                asset.status = 'processing'
+                db.session.commit()
                 if is_pdf:
                     self.ocr_processor.process_pdf(asset.url, asset.id)
                 else:
                     self.ocr_processor.process_image(asset.url, asset.id)
+                # Note: OCR processor now handles setting final status
             except Exception as e:
                 current_app.logger.error(f"Error processing OCR for asset {asset.url}: {str(e)}")
+                asset.status = 'failed'
+                db.session.commit()
 
     def fetch_dom(self, url):
         options = webdriver.ChromeOptions()
@@ -83,7 +88,7 @@ class Crawler:
         driver = None
         retry_count = 0
         max_retries = 3
-        base_timeout = 30
+        base_timeout = 60
         
         while retry_count < max_retries:
             try:
@@ -142,6 +147,13 @@ class Crawler:
 
             soup = BeautifulSoup(html, 'html.parser')
             base_url = url_entry.url
+
+            # Extract headers and paragraphs
+            text_content = []
+            for tag in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p']):
+                text_content.append(tag.get_text(separator=' ', strip=True))
+            
+            url_entry.page_content = '\n'.join(text_content)
 
             # Process images
             for img in soup.find_all('img'):

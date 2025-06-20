@@ -8,9 +8,10 @@ from PIL import Image
 import os
 import logging
 from app import db
-from app.models import OCRResult
+from app.models import OCRResult, Asset
 from flask import current_app
 import tempfile
+import json
 
 class OCRProcessor:
     def __init__(self):
@@ -44,6 +45,17 @@ class OCRProcessor:
             self.logger.error(f"Error initializing OCR processor: {str(e)}")
             raise
 
+    def set_asset_status(self, asset_id, status):
+        """Helper to update asset status."""
+        try:
+            asset = Asset.query.get(asset_id)
+            if asset:
+                asset.status = status
+                db.session.commit()
+        except Exception as e:
+            self.logger.error(f"Error updating status for asset {asset_id}: {e}")
+            db.session.rollback()
+
     @retry.Retry(
         predicate=retry.if_exception_type(GoogleAPIError),
         initial=1.0,
@@ -52,13 +64,16 @@ class OCRProcessor:
         deadline=300.0
     )
     def process_image(self, image_url, asset_id):
+        self.set_asset_status(asset_id, 'processing')
         try:
             self.logger.info(f"Processing image: {image_url}")
             
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
             # Download the image
-            response = requests.get(image_url, timeout=30)
+            response = requests.get(image_url, timeout=30, headers=headers)
             if response.status_code != 200:
-                self.logger.error(f"Failed to download image: {image_url}")
+                self.logger.error(f"Failed to download image: {image_url} (Status: {response.status_code})")
+                self.set_asset_status(asset_id, 'failed')
                 return None
 
             # Create image object
@@ -78,6 +93,7 @@ class OCRProcessor:
                 confidence=document.pages[0].confidence if document.pages else 0.0
             )
             db.session.add(ocr_result)
+            self.set_asset_status(asset_id, 'processed')
             db.session.commit()
 
             self.logger.info(f"Successfully processed image: {image_url}")
@@ -85,6 +101,7 @@ class OCRProcessor:
 
         except Exception as e:
             self.logger.error(f"Error processing image {image_url}: {str(e)}")
+            self.set_asset_status(asset_id, 'failed')
             db.session.rollback()
             return None
 
@@ -96,15 +113,18 @@ class OCRProcessor:
         deadline=300.0
     )
     def process_pdf(self, pdf_url, asset_id):
+        self.set_asset_status(asset_id, 'processing')
         try:
             self.logger.info(f"Processing PDF: {pdf_url}")
             
             # Create temporary directory for processing
             with tempfile.TemporaryDirectory() as temp_dir:
                 # Download the PDF
-                response = requests.get(pdf_url, timeout=30)
+                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+                response = requests.get(pdf_url, timeout=30, headers=headers)
                 if response.status_code != 200:
-                    self.logger.error(f"Failed to download PDF: {pdf_url}")
+                    self.logger.error(f"Failed to download PDF: {pdf_url} (Status: {response.status_code})")
+                    self.set_asset_status(asset_id, 'failed')
                     return None
 
                 # Upload PDF to Google Cloud Storage
@@ -143,7 +163,16 @@ class OCRProcessor:
                 results = []
                 for output in bucket.list_blobs(prefix=f"ocr_results/{asset_id}/"):
                     content = output.download_as_string()
-                    results.append(content.decode('utf-8'))
+                    # Parse the JSON response and extract text
+                    try:
+                        response_data = json.loads(content.decode('utf-8'))
+                        if 'responses' in response_data and response_data['responses']:
+                            full_text = response_data['responses'][0].get('fullTextAnnotation', {}).get('text', '')
+                            results.append(full_text)
+                        else:
+                            results.append(content.decode('utf-8'))
+                    except json.JSONDecodeError:
+                        results.append(content.decode('utf-8'))
 
                 # Save OCR result
                 ocr_result = OCRResult(
@@ -152,6 +181,7 @@ class OCRProcessor:
                     confidence=1.0  # PDF OCR confidence is not provided by the API
                 )
                 db.session.add(ocr_result)
+                self.set_asset_status(asset_id, 'processed')
                 db.session.commit()
 
                 # Cleanup
@@ -164,5 +194,6 @@ class OCRProcessor:
 
         except Exception as e:
             self.logger.error(f"Error processing PDF {pdf_url}: {str(e)}")
+            self.set_asset_status(asset_id, 'failed')
             db.session.rollback()
             return None 

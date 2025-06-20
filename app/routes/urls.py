@@ -24,7 +24,8 @@ url_model = api.model('URL', {
 url_response = api.model('URLResponse', {
     'id': fields.Integer(description='URL ID'),
     'url': fields.String(description='URL'),
-    'status': fields.String(description='Crawling status')
+    'status': fields.String(description='Crawling status'),
+    'page_content': fields.String(description='Extracted text content from the page')
 })
 
 asset_response = api.model('AssetResponse', {
@@ -88,7 +89,7 @@ class URLResource(Resource):
         if not url:
             return {'error': 'URL not found'}, 404
             
-        return {'id': url.id, 'url': url.url, 'status': url.status}
+        return {'id': url.id, 'url': url.url, 'status': url.status, 'page_content': url.page_content}
 
     @jwt_required()
     @domain_urls_ns.expect(url_model)
