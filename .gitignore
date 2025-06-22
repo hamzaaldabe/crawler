@@ -45,3 +45,4 @@ ENV/
 Thumbs.db
 
 *.json
+pg_dump.sql

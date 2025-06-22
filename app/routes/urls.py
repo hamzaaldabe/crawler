@@ -49,7 +49,7 @@ class URLList(Resource):
         if not domain:
             return {'error': 'Domain not found'}, 404
         urls = URL.query.filter_by(domain_id=domain_id).all()
-        return [{'id': u.id, 'url': u.url, 'status': u.status} for u in urls]
+        return [{'id': u.id, 'url': u.url, 'status': u.status, 'page_content': u.page_content} for u in urls]
 
     @jwt_required()
     @domain_urls_ns.expect(url_model)

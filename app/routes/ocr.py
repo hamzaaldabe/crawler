@@ -37,8 +37,6 @@ class ProcessAssetOCR(Resource):
         asset = Asset.query.get_or_404(asset_id)
         url = URL.query.get_or_404(asset.url_id)
         domain = Domain.query.get_or_404(url.domain_id)
-        # if domain.user_id != current_user_id:
-        #     return {'message': 'Access denied'}, 403
             
         # Initialize OCR processor
         ocr_processor = OCRProcessor()

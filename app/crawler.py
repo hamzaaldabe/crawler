@@ -37,8 +37,8 @@ class Crawler:
             ),
             'Accept-Language': 'en-US,en;q=0.9',
         }
-        self.page_load_timeout = 60  # seconds
-        self.script_timeout = 60     # seconds
+        self.page_load_timeout = 1200  # seconds
+        self.script_timeout = 1200     # seconds
         self.max_retries = 3         # number of retries for failed requests
 
     def is_image(self, url):
