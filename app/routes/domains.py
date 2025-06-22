@@ -176,7 +176,8 @@ class BulkImportURLs(Resource):
         logger.info(f"Bulk import request received for domain_id: {domain_id}, user_id: {current_user_id}")
         
         # Verify domain exists and user has access
-        domain = Domain.query.filter_by(id=domain_id, user_id=current_user_id).first()
+        domain = Domain.query.filter_by(id=domain_id).first()
+        
         if not domain:
             logger.error(f"Domain not found: domain_id={domain_id}, user_id={current_user_id}")
             return {'error': 'Domain not found'}, 404
