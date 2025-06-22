@@ -6,6 +6,10 @@ from app.models import Domain, URL
 from validators import domain as validate_domain
 from validators import url as validate_url
 import io
+import logging
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 domains_bp = Blueprint('domains', __name__)
 domains_ns = Namespace('domains', description='Domain operations', path='/domains')
@@ -169,24 +173,42 @@ class BulkImportURLs(Resource):
         """Bulk import URLs from a text file to a domain"""
         current_user_id = get_jwt_identity()
         
+        logger.info(f"Bulk import request received for domain_id: {domain_id}, user_id: {current_user_id}")
+        
         # Verify domain exists and user has access
         domain = Domain.query.filter_by(id=domain_id, user_id=current_user_id).first()
         if not domain:
+            logger.error(f"Domain not found: domain_id={domain_id}, user_id={current_user_id}")
             return {'error': 'Domain not found'}, 404
+        
+        logger.info(f"Domain found: {domain.domain}")
         
         # Check if file was uploaded
         if 'file' not in request.files:
+            logger.error("No file in request.files")
+            logger.info(f"Available keys in request.files: {list(request.files.keys())}")
             return {'error': 'No file provided'}, 400
         
         file = request.files['file']
+        logger.info(f"File received: {file.filename}, size: {len(file.read()) if file else 'N/A'}")
+        
+        # Reset file pointer after reading
+        file.seek(0)
+        
         if file.filename == '':
+            logger.error("Empty filename")
             return {'error': 'No file selected'}, 400
         
         # Read and process the file
         try:
             # Read file content
             content = file.read().decode('utf-8')
+            logger.info(f"File content length: {len(content)} characters")
+            logger.info(f"File content preview: {content[:200]}...")
+            
             urls = [line.strip() for line in content.split('\n') if line.strip()]
+            logger.info(f"Extracted {len(urls)} URLs from file")
+            logger.info(f"URLs: {urls}")
             
             successful_imports = 0
             failed_imports = 0
@@ -194,8 +216,11 @@ class BulkImportURLs(Resource):
             
             for url in urls:
                 try:
+                    logger.info(f"Processing URL: {url}")
+                    
                     # Validate URL
                     if not validate_url(url):
+                        logger.warning(f"Invalid URL format: {url}")
                         failed_imports += 1
                         failed_urls.append(f"{url} (invalid format)")
                         continue
@@ -203,6 +228,7 @@ class BulkImportURLs(Resource):
                     # Check if URL already exists for this domain
                     existing_url = URL.query.filter_by(url=url, domain_id=domain_id).first()
                     if existing_url:
+                        logger.info(f"URL already exists: {url}")
                         failed_imports += 1
                         failed_urls.append(f"{url} (already exists)")
                         continue
@@ -211,13 +237,16 @@ class BulkImportURLs(Resource):
                     url_entry = URL(url=url, domain=domain, status='pending')
                     db.session.add(url_entry)
                     successful_imports += 1
+                    logger.info(f"Successfully added URL: {url}")
                     
                 except Exception as e:
+                    logger.error(f"Error processing URL {url}: {str(e)}")
                     failed_imports += 1
                     failed_urls.append(f"{url} (error: {str(e)})")
             
             # Commit all successful imports
             db.session.commit()
+            logger.info(f"Bulk import completed. Successful: {successful_imports}, Failed: {failed_imports}")
             
             return {
                 'message': 'Bulk import completed',
@@ -228,5 +257,8 @@ class BulkImportURLs(Resource):
             }, 200
             
         except Exception as e:
+            logger.error(f"Error in bulk import: {str(e)}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             db.session.rollback()
             return {'error': f'Error processing file: {str(e)}'}, 400
